@@ -1,0 +1,49 @@
+
+<!-- Add a single "Download All" button -->
+<button id="downloadAllButton">Download All Images</button>
+
+
+<script>
+// Function to handle image download
+function downloadImage(imageUrl, fileName) {
+  var link = document.createElement("a");
+  link.download = fileName;
+  link.href = imageUrl;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  delete link;
+}
+
+// Function to handle downloading all images
+function downloadAllImages() {
+  const images = document.querySelectorAll('a[download]');
+  images.forEach((image) => {
+    const imageUrl = image.getAttribute('href');
+    const fileName = image.getAttribute('download');
+    downloadImage(imageUrl, fileName);
+  });
+}
+
+// Attach the downloadAllImages function to the "Download All" button click event
+document.getElementById('downloadAllButton').addEventListener('click', downloadAllImages);
+
+</script>
+
+
+
+
+
+
+
+
+
+{{!-- 
+<!-- Display formatted photos (initially hidden) -->
+<div id="formatted-photos" style="display: none;"></div>
+
+<form id="upload-form" enctype="multipart/form-data">
+  <input type="file" name="photo" accept="image/*" multiple>
+  <button type="button" id="upload-button">Upload Photos</button>
+</form> --}}
+
