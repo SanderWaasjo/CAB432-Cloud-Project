@@ -52,7 +52,6 @@ AWS.config.update({
 	sessionToken: process.env.aws_session_token,
 	region: "ap-southeast-2",
 });
-const FLICKR_API_KEY = process.env.FLICKR_API_KEY;
 
 
 //S3 setup
@@ -108,12 +107,12 @@ router.post('/', upload.array('photo'), async (req, res) => {
     const uploadedFilePath = file.path;
     const outputFilePathGray = `uploads-gray/gray-${file.filename}`;
     const outputFilePathSigmodial = `uploads-sigmodial/${file.filename}`;
-    const redisKeyGray = `gray-${file.filename}`;
-    const redisKeySigmodial = `sigmodial-${file.filename}`;
-    const result = await redisClient.get(redisKeyGray);
+    const storageKeyGray = `gray-${file.filename}`;
+    const storageKeySigmodial = `sigmodial-${file.filename}`;
+    const result = await redisClient.get(storageKeyGray);
 
     if (!result) {
-      s3_promises.push(checkS3BucketAndGenerateNewImage(bucketName, redisKeyGray, redisKeySigmodial, transformedPhotoDataBW, transformedPhotoDataSigmodial, uploadedFilePath, outputFilePathGray, outputFilePathSigmodial));
+      s3_promises.push(checkS3BucketAndGenerateNewImage(bucketName, storageKeyGray, storageKeySigmodial, transformedPhotoDataBW, transformedPhotoDataSigmodial, uploadedFilePath, outputFilePathGray, outputFilePathSigmodial));
     }
   }
 
@@ -132,77 +131,22 @@ router.post('/', upload.array('photo'), async (req, res) => {
 
 
 
-
-
+//Fetching Timing Data from Redis:
+async function fetchTimingData(storageKey) {
+  try {
+    const timingKey = `timing-${storageKey}`;
+    const timingData = await redisClient.get(timingKey);
+    return timingData;
+  } catch (err) {
+    console.error('Error fetching timing data from Redis:', err);
+  }
+}
 
 
 
   router.get("/", async function (req, res) {
-    const query = req.query.query;
-    const maxPhotos = req.query.maxPhotos; 
-
-    const response = await fetch(
-      `https://api.flickr.com/services/rest?method=flickr.photos.search&api_key=${FLICKR_API_KEY}&tags=${query}&per-page=${maxPhotos}&format=json&nojsoncallback=1&media=photos`
-    );
-    const data = await response.json();
-    const page = Math.floor(Math.random() * data.photos.pages);
-    
-    //Fjerne når jeg får det til å fungere
-    console.log(page);
-
-    const randomPageResponse = await fetch(
-      `https://api.flickr.com/services/rest?method=flickr.photos.search&api_key=${FLICKR_API_KEY}&tags=${query}&per-page=${maxPhotos}&format=json&nojsoncallback=1&media=photos&page=${page}`
-    );
-    const randomPageData = await randomPageResponse.json();
-    const photos = randomPageData.photos;
-
-    const formattedPhotoData = [];
-    const transformedPhotoData1 = [];
-    const transformedPhotoData2 = [];
-    const transformedPhotoDataRedis = [];
-
-    const operations = []; // We'll store our promises here
-
-    for (let i = 0; i < maxPhotos; i++) {
-      const photo = photos.photo[i];
-      const image = `https://farm${photo.farm}.static.flickr.com/${photo.server}/${photo.id}_${photo.secret}_t.jpg`;
-      const url = `http://www.flickr.com/photos/${photo.owner}/${photo.id}`;
-      const title = photo.title;
-      const formatName = `farm${photo.farm}_${photo.server}_${photo.id}_${photo.secret}_t.jpg`;
-      formattedPhotoData.push({ image, url, title });
+    res.render('index', {
       
-      const outputFilePath = `newphotos/${formatName}`;
-      
-      const storageKey = `${formatName}`;
-      const storageKey2 = `2${formatName}`;
-
-      const result = await redisClient.get(storageKey);
-      
-      if(result){
-        //Serve from Redis cache and append to transformedPhotoData
-
-        //RedisResult is in base 64, convert to image and append to transformedPhotoDataRedis
-        const redisResult = await redisClient.get(storageKey)
-        // var redisImage = new Image();
-        // image.src = redisResult;
-        transformedPhotoDataRedis.push({storageKey, redisResult});
-        
-      }else{
-        //Checking S3 bucket or generate new image based on API response
-        operations.push(checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageKey2, transformedPhotoData1, transformedPhotoData2, image, outputFilePath));
-      }
-      }
-      
-    
-    await Promise.all(operations);
-    res.render("index", {
-      formattedPhotoData,
-      searchQuery: query,
-      maxPhotos,
-      page,
-      transformedPhotoData1,
-      transformedPhotoData2,
-      transformedPhotoDataRedis,
     });
   });
 
@@ -217,8 +161,6 @@ async function uploadToS3(data, storageKey, bucketName, transformedPhotoData) {
     console.log(`Successfully uploaded data to ${bucketName}${storageKey}`);
     const s3URL = `https://${bucketName}.s3.ap-southeast-2.amazonaws.com/${storageKey}`;
 
-
-
     transformedPhotoData.push({ storageKey, s3URL });
     //console.log(transformedPhotoData);
   } catch (err) {
@@ -226,46 +168,70 @@ async function uploadToS3(data, storageKey, bucketName, transformedPhotoData) {
   }
 }
 
-//Function for storing in the Redis Cache
-async function storeInRedisCache(body, storageKey){
-  const img64Base = body.toString('base64');
-  redisClient.setEx(storageKey, 3600, img64Base);
-}
-
-
-
-//TODO: Denne fungerer, men klarer ikke vise fra S3
 
 //Function for checking the S3 bucket for already transformed photos, or we generate a new image based on the API response
 async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageKey2, transformedPhotoData1, transformedPhotoData2, image, outputFilePathGray, outputFilePathSigmodial) {
   const params = { Bucket: bucketName, Key: storageKey };
   try {
     const s3Result = await s3.getObject(params).promise();
-
-    const s3URL = `https://${bucketName}.s3.ap-southeast-2.amazonaws.com/${storageKey}`;
-
-
-    transformedPhotoData1.push({ storageKey, s3URL });
-    console.log(transformedPhotoData1);
-    await storeInRedisCache(body, storageKey);
-
-  } catch (err) {
+    if (s3Result) {
+      // The object exists in S3, so you can serve it directly
+      const s3URL = `https://${bucketName}.s3.ap-southeast-2.amazonaws.com/${storageKey}`;
+        transformedPhotoData1.push({ storageKey, s3URL });
+        console.log('Photo: ',storageKey,'is fetched from S3');
+      }
+    } catch (err) {
     if (err.statusCode === 404) {
       // Generate new image
       const util = require('util');
       const execPromised = util.promisify(exec);
+
       try {
         await execPromised(`magick convert ${image} -colorspace LinearGray ${outputFilePathGray}`);
+
         //console.log(`Photo transformed to: ${outputFilePath}`);
         const data = await fs.promises.readFile(outputFilePathGray);
         await uploadToS3(data, storageKey, bucketName, transformedPhotoData1);
-        await storeInRedisCache(data, storageKey);
+      } catch (error) {
+        console.error('Error during image transformation or S3 upload:', error);
+      }
+    }
+  }
+
+  const params2 = { Bucket: bucketName, Key: storageKey2 };
+  try {
+    const s3Result2 = await s3.getObject(params2).promise();
+    if (s3Result2) {
+      // The object exists in S3, so you can serve it directly
+      const s3URL = `https://${bucketName}.s3.ap-southeast-2.amazonaws.com/${storageKey2}`;
+        transformedPhotoData2.push({ storageKey2, s3URL });
+        console.log('Photo: ',storageKey2,'is fetched from S3');
+      }
+    } catch (err) {
+    if (err.statusCode === 404) {
+      // Generate new image
+      const util = require('util');
+      const execPromised = util.promisify(exec);  
+      try {
+        //TODO: Likte egentlig denne ganske bra
+        await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 120,90 composite-${outputFilePathSigmodial}`);
+
+        const sigmodial_filepath = `composite-${outputFilePathSigmodial}`;
+
+        const data = await fs.promises.readFile(sigmodial_filepath);
+        await uploadToS3(data, storageKey2, bucketName, transformedPhotoData2);
 
       } catch (error) {
         console.error('Error during image transformation or S3 upload:', error);
       }
+    } else {
+      console.log('Something went wrong');
+    }
+  }
+}
 
 
+//Logic for converting the image to sigmodial - this is the one taking a lot of time
       // try {
       //   await execPromised(`magick convert ${image} -sigmoidal-contrast 15x30% -modulate 50 ${outputFilePathSigmodial}`);
       //   await execPromised(`magick convert ${outputFilePathSigmodial} -sparse-color Barycentric '0,0 black 0,%h white' -function polynomial 4,-4,1 blurmap-${outputFilePathSigmodial}`);
@@ -274,36 +240,8 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
 
       //   const data = await fs.promises.readFile(sigmodial_filepath);
       //   await uploadToS3(data, storageKey2, bucketName, transformedPhotoData2);
-      //   await storeInRedisCache(data, storageKey2);
 
       // } catch (error) {
       //   console.error('Error during image transformation or S3 upload:', error);
       // }
-
-
-
-      try {
-        //TODO: Likte egentlig denne ganske bra
-        await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 120,90 composite-${outputFilePathSigmodial}`);
-
-
-
-        const sigmodial_filepath = `composite-${outputFilePathSigmodial}`;
-
-        const data = await fs.promises.readFile(sigmodial_filepath);
-        await uploadToS3(data, storageKey2, bucketName, transformedPhotoData2);
-        await storeInRedisCache(data, storageKey2);
-
-      } catch (error) {
-        console.error('Error during image transformation or S3 upload:', error);
-      }
-
-
-    } else {
-      console.log('Something went wrong');
-    }
-  }
-}
-
-
 
