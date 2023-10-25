@@ -266,28 +266,10 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
       }
 
 
-      try {
-        await execPromised(`magick convert ${image} -sigmoidal-contrast 15x30% -modulate 50 ${outputFilePathSigmodial}`);
-        await execPromised(`magick convert ${outputFilePathSigmodial} -sparse-color Barycentric '0,0 black 0,%h white' -function polynomial 4,-4,1 blurmap-${outputFilePathSigmodial}`);
-        await execPromised(`magick convert ${outputFilePathSigmodial} blurmap-${outputFilePathSigmodial} -compose Blur -set option:compose:args 10 -composite composite-${outputFilePathSigmodial}`);
-        const sigmodial_filepath = `composite-${outputFilePathSigmodial}`;
-
-        const data = await fs.promises.readFile(sigmodial_filepath);
-        await uploadToS3(data, storageKey2, bucketName, transformedPhotoData2);
-        await storeInRedisCache(data, storageKey2);
-
-      } catch (error) {
-        console.error('Error during image transformation or S3 upload:', error);
-      }
-
-
-
       // try {
-      //   //TODO: Likte egentlig denne ganske bra
-      //   await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 120,90 composite-${outputFilePathSigmodial}`);
-
-
-
+      //   await execPromised(`magick convert ${image} -sigmoidal-contrast 15x30% -modulate 50 ${outputFilePathSigmodial}`);
+      //   await execPromised(`magick convert ${outputFilePathSigmodial} -sparse-color Barycentric '0,0 black 0,%h white' -function polynomial 4,-4,1 blurmap-${outputFilePathSigmodial}`);
+      //   await execPromised(`magick convert ${outputFilePathSigmodial} blurmap-${outputFilePathSigmodial} -compose Blur -set option:compose:args 10 -composite composite-${outputFilePathSigmodial}`);
       //   const sigmodial_filepath = `composite-${outputFilePathSigmodial}`;
 
       //   const data = await fs.promises.readFile(sigmodial_filepath);
@@ -297,6 +279,24 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
       // } catch (error) {
       //   console.error('Error during image transformation or S3 upload:', error);
       // }
+
+
+
+      try {
+        //TODO: Likte egentlig denne ganske bra
+        await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 120,90 composite-${outputFilePathSigmodial}`);
+
+
+
+        const sigmodial_filepath = `composite-${outputFilePathSigmodial}`;
+
+        const data = await fs.promises.readFile(sigmodial_filepath);
+        await uploadToS3(data, storageKey2, bucketName, transformedPhotoData2);
+        await storeInRedisCache(data, storageKey2);
+
+      } catch (error) {
+        console.error('Error during image transformation or S3 upload:', error);
+      }
 
 
     } else {
