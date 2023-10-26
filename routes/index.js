@@ -207,15 +207,18 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
         transformedPhotoData2.push({ storageKey2, s3URL });
         console.log('Photo: ',storageKey2,'is fetched from S3');
       }
+      
     } catch (err) {
     if (err.statusCode === 404) {
       // Generate new image
       const util = require('util');
       const execPromised = util.promisify(exec);  
+      
+      //Logic for converting the image to sigmodial - this is the one taking a lot of time
       try {
-        //TODO: Likte egentlig denne ganske bra
-        await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 120,90 composite-${outputFilePathSigmodial}`);
-
+        await execPromised(`magick convert ${image} -sigmoidal-contrast 15x30% -modulate 50 ${outputFilePathSigmodial}`);
+        await execPromised(`magick convert ${outputFilePathSigmodial} -sparse-color Barycentric '0,0 black 0,%h white' -function polynomial 4,-4,1 blurmap-${outputFilePathSigmodial}`);
+        await execPromised(`magick convert ${outputFilePathSigmodial} blurmap-${outputFilePathSigmodial} -compose Blur -set option:compose:args 10 -composite composite-${outputFilePathSigmodial}`);
         const sigmodial_filepath = `composite-${outputFilePathSigmodial}`;
 
         const data = await fs.promises.readFile(sigmodial_filepath);
@@ -224,6 +227,7 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
       } catch (error) {
         console.error('Error during image transformation or S3 upload:', error);
       }
+      
     } else {
       console.log('Something went wrong');
     }
@@ -231,11 +235,13 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
 }
 
 
-//Logic for converting the image to sigmodial - this is the one taking a lot of time
-      // try {
-      //   await execPromised(`magick convert ${image} -sigmoidal-contrast 15x30% -modulate 50 ${outputFilePathSigmodial}`);
-      //   await execPromised(`magick convert ${outputFilePathSigmodial} -sparse-color Barycentric '0,0 black 0,%h white' -function polynomial 4,-4,1 blurmap-${outputFilePathSigmodial}`);
-      //   await execPromised(`magick convert ${outputFilePathSigmodial} blurmap-${outputFilePathSigmodial} -compose Blur -set option:compose:args 10 -composite composite-${outputFilePathSigmodial}`);
+
+
+
+            // try {
+      //   //TODO: Likte egentlig denne ganske bra
+      //   await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 120,90 composite-${outputFilePathSigmodial}`);
+
       //   const sigmodial_filepath = `composite-${outputFilePathSigmodial}`;
 
       //   const data = await fs.promises.readFile(sigmodial_filepath);
@@ -244,4 +250,3 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
       // } catch (error) {
       //   console.error('Error during image transformation or S3 upload:', error);
       // }
-
