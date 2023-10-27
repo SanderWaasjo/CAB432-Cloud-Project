@@ -248,7 +248,7 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
 
       try {
         const start_transform_time_bw = process.hrtime();  // Capture start time for B/W transformation
-        await execPromised(`magick convert ${image} -colorspace LinearGray ${outputFilePathGray}`);
+        await execPromised(`convert ${image} -colorspace LinearGray ${outputFilePathGray}`);
         const end_transform_time_bw = process.hrtime(start_transform_time_bw);  // Capture end time for B/W transformation
 
         // Calculate the duration in milliseconds for B/W transformation
@@ -284,11 +284,11 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
       try {
         //TODO: Likte egentlig denne ganske bra
         const start_transform_time_sig = process.hrtime();  // Capture start time for Blurred transformation
-        await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 120,90 ${outputFilePathBlurred}`);
+        await execPromised(`convert ${image} -brightness-contrast -10x10 -modulate 120,90 ${outputFilePathBlurred}`);
         //await execPromised(`magick convert ${image} -sigmoidal-contrast 15x30% -modulate 50 ${outputFilePathBlurred}`);
 
-        await execPromised(`magick convert ${outputFilePathBlurred} -sparse-color Barycentric '0,0 black 0,%h white' -function polynomial 4,-4,1 blurmap-${outputFilePathBlurred}`);
-        await execPromised(`magick convert ${outputFilePathBlurred} blurmap-${outputFilePathBlurred} -compose Blur -set option:compose:args 10 -composite composite-${outputFilePathBlurred}`);
+        await execPromised(`convert ${outputFilePathBlurred} -sparse-color Barycentric '0,0 black 0,%h white' -function polynomial 4,-4,1 blurmap-${outputFilePathBlurred}`);
+        await execPromised(`convert ${outputFilePathBlurred} blurmap-${outputFilePathBlurred} -compose Blur -set option:compose:args 10 -composite composite-${outputFilePathBlurred}`);
         
         const end_transform_time_sig = process.hrtime(start_transform_time_sig);  // Capture end time for Blurred transformation
         
@@ -333,7 +333,7 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
 
       try {
         const start_transform_time_XXXX = process.hrtime();  // Capture start time for XXXX transformation
-        await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 110,110 ${outputFilePathXXXX}`);
+        await execPromised(`convert ${image} -brightness-contrast -10x10 -modulate 110,110 ${outputFilePathXXXX}`);
         const end_transform_time_XXXX = process.hrtime(start_transform_time_XXXX);  // Capture end time for XXXX transformation
 
         // Calculate the duration in milliseconds for XXXX transformation
