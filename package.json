@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.435.0",
+    "@aws-sdk/credential-providers": "^3.437.0",
     "@aws-sdk/s3-request-presigner": "^3.435.0",
     "@smithy/hash-node": "^2.0.12",
     "aws-sdk": "^2.1480.0",
