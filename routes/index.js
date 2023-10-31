@@ -2,8 +2,6 @@ var express = require('express');
 var router = express.Router();
 const { exec } = require('child_process');
 const multer = require('multer');
-const responseTime = require('response-time')
-const axios = require('axios');
 const redis = require('redis');
 require('dotenv').config();
 const AWS = require('aws-sdk');
@@ -11,37 +9,27 @@ const app = express();
 const fs = require('fs');
 
 
-
-const { Hash } = require('@smithy/hash-node');
-const region = 	'ap-southeast-2';
-
-
-
-
-// Create a Redis client
+//Setting up the redis connection
 const redisClient = redis.createClient({
-  host: 'localhost', // Your Redis server host
-  port: 6379,        // Your Redis server port
+  host: 'localhost', 
+  port: 6379,        
 });
 
 redisClient.connect()
 	.catch((err) => {
 		console.log(err);
 });
-// Connect to Redis
+
 redisClient.on('connect', () => {
   console.log('Connected to Redis');
 });
 
-// Handle errors
 redisClient.on('error', (err) => {
   console.error('Redis Error:', err);
 });
 
-
-// Used to display response time in HTTP header
-app.use(responseTime());	
-
+//Setting the AWS config variables based on the innputed env variables
+const region = 	'ap-southeast-2';
 AWS.config.update({
 	accessKeyId: process.env.aws_access_key_id,
 	secretAccessKey: process.env.aws_secret_access_key,
@@ -50,7 +38,7 @@ AWS.config.update({
 });
 
 
-//S3 setup
+//S3 bucket setup
 const bucketName = "n11725630-project"; 
 const s3 = new AWS.S3({ apiVersion: "2006-03-01" });
 
@@ -65,45 +53,37 @@ s3.createBucket({ Bucket: bucketName })
 	});
 
 
-
-// Multer logic for uploading photos to disk
+// Multer logic for uploading photos to instance
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // Set the destination folder for uploaded files
+    cb(null, 'uploads/'); 
   },
   filename: function (req, file, cb) {
-    // const ext = file.originalname.split('.').pop(); // Get the file extension
-    // cb(null, Date.now() + '.' + ext); // Set a unique filename using a timestamp
-    const ext = file.originalname.split('.').pop(); // Get the file extension
     cb(null, file.originalname);
   },
 });
 const upload = multer({ storage: storage });
 
 
-
+//Post logic for handlig the upload of photos from user
 router.post('/', upload.array('photo'), async (req, res) => {
   const uploadedFiles = req.files || [];
   const transformedPhotoDataBW = [];
   const transformedPhotoDataBlurred = [];
-  const transformedPhotoDataXXXX = [];
-
+  const transformedPhotoDataEnhanced = [];
   const s3_promises = [];
 
+  //Logic for process the input photos
   async function processFile(file) {
     const uploadedFilePath = file.path;
     const outputFilePathGray = `uploads-gray/gray-${file.filename}`;
     const outputFilePathBlurred = `uploads-Blurred/${file.filename}`;
-    const outputFilePathXXXX = `uploads-XXXX/${file.filename}`;
+    const outputFilePathEnhanced = `uploads-Enhanced/${file.filename}`;
     const storageKeyGray = `gray-${file.filename}`;
     const storageKeyBlurred = `Blurred-${file.filename}`;
-    const storageKeyXXXX = `XXXX-${file.filename}`;
-
-    const result = await redisClient.get(storageKeyGray);
+    const storageKeyEnhanced = `Enhanced-${file.filename}`;
   
-    if (!result) {      
-      s3_promises.push(checkS3BucketAndGenerateNewImage(bucketName, storageKeyGray, storageKeyBlurred, storageKeyXXXX, transformedPhotoDataBW, transformedPhotoDataBlurred, transformedPhotoDataXXXX, uploadedFilePath, outputFilePathGray, outputFilePathBlurred, outputFilePathXXXX));
-    }
+    s3_promises.push(checkS3BucketAndGenerateNewImage(bucketName, storageKeyGray, storageKeyBlurred, storageKeyEnhanced, transformedPhotoDataBW, transformedPhotoDataBlurred, transformedPhotoDataEnhanced, uploadedFilePath, outputFilePathGray, outputFilePathBlurred, outputFilePathEnhanced));
   }
   
 
@@ -111,6 +91,7 @@ router.post('/', upload.array('photo'), async (req, res) => {
   await Promise.all(uploadedFiles.map(processFile));
   await Promise.all(s3_promises);
 
+  //Logic for deleting temp stored photos during processing
   await fs.readdir('uploads', (err, files) => {
     if (err) {
       console.error(err);
@@ -122,8 +103,7 @@ router.post('/', upload.array('photo'), async (req, res) => {
   });
 
 
-
-   // Fetch the last saved day from Redis
+   // Logic for fetching the last saved day from Redis
    let lastSavedDay;
    try {
      const lastSavedDayISOString = await redisClient.get('lastSavedDay');
@@ -166,27 +146,27 @@ router.post('/', upload.array('photo'), async (req, res) => {
     console.error('Error fetching upload count:', err);
   }
   
+  //Console logging for ensuring the variables are changes properly
   console.log('Total number of uploads:', totalUploadCount);
-  
   console.log('Total transformation time for B/W images:', totalTransformationTimeBW);
   console.log('Total transformation time for Blurred images:', totalTransformationTimeBlurred);
-  console.log('Total transformation time for XXXX images:', totalTransformationTimeXXXX);
+  console.log('Total transformation time for Enhanced images:', totalTransformationTimeEnhanced);
 
 
-
+  //Rendering of variables to the frontend 
   res.render('index', {
     uploadTransformedPhotosBW: transformedPhotoDataBW,
     uploadTransformedPhotosBlurred: transformedPhotoDataBlurred,
-    uploadTransformedPhotosXXXX: transformedPhotoDataXXXX,
+    uploadTransformedPhotosEnhanced: transformedPhotoDataEnhanced,
     totalTransformationTimeBW,
     totalTransformationTimeBlurred,
-    totalTransformationTimeXXXX,
+    totalTransformationTimeEnhanced,
     totalUploadCount
     });
 });
 
 
-
+//Logic for when loading the application at first
 router.get("/", async function (req, res) {
   res.render('index', {
       
@@ -198,20 +178,21 @@ module.exports = router;
 
 //Function for uploading to the S3 bucket
 async function uploadToS3AndStoreInList(data, storageKey, bucketName, transformedPhotoData) {
-        const s3Params = { Bucket: bucketName, Key: storageKey, Body: data };
-        try {
-          await s3.putObject(s3Params).promise();
-          console.log(`Successfully uploaded data to ${bucketName}${storageKey}`);
-          const s3URL = `https://${bucketName}.s3.ap-southeast-2.amazonaws.com/${storageKey}`;
+  const s3Params = { Bucket: bucketName, Key: storageKey, Body: data };
+  try {
+    await s3.putObject(s3Params).promise();
+    console.log(`Successfully uploaded data to ${bucketName}${storageKey}`);
+    const s3URL = `https://${bucketName}.s3.ap-southeast-2.amazonaws.com/${storageKey}`;
 
-      
-          transformedPhotoData.push({ storageKey, s3URL });
-          //console.log(transformedPhotoData);
-        } catch (err) {
-          console.log('Something went wrong when accessing the S3 bucket:', err);
-        }
-      }
 
+    transformedPhotoData.push({ storageKey, s3URL });
+    //console.log(transformedPhotoData);
+  } catch (err) {
+    console.log('Something went wrong when accessing the S3 bucket:', err);
+  }
+}
+
+//Deleting temp stored local files
 async function deleteLocalFile(path){
   fs.unlink(path, (err) => {
     if (err) {
@@ -225,12 +206,12 @@ async function deleteLocalFile(path){
 
 let totalTransformationTimeBW = 0;
 let totalTransformationTimeBlurred = 0;
-let totalTransformationTimeXXXX = 0;
+let totalTransformationTimeEnhanced = 0;
 
 //Function for checking the S3 bucket for already transformed photos, or we generate a new image based on the API response
-async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageKey2, storageKey3, transformedPhotoData1, transformedPhotoData2, transformedPhotoData3, image, outputFilePathGray, outputFilePathBlurred, outputFilePathXXXX) {
+async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageKey2, storageKey3, transformedPhotoData1, transformedPhotoData2, transformedPhotoData3, image, outputFilePathGray, outputFilePathBlurred, outputFilePathEnhanced) {
   
-  //B/W photos
+  //BW photos
   const params = { Bucket: bucketName, Key: storageKey };
   try {
     const s3Result = await s3.getObject(params).promise();
@@ -247,18 +228,18 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
       const execPromised = util.promisify(exec);
 
       try {
-        const start_transform_time_bw = process.hrtime();  // Capture start time for B/W transformation
-        await execPromised(`convert ${image} -colorspace LinearGray ${outputFilePathGray}`);
-        const end_transform_time_bw = process.hrtime(start_transform_time_bw);  // Capture end time for B/W transformation
+        const start_transform_time_bw = process.hrtime(); 
 
-        // Calculate the duration in milliseconds for B/W transformation
-        const duration_bw = (end_transform_time_bw[0] * 1e9 + end_transform_time_bw[1]) / 1e6;
-        totalTransformationTimeBW += Math.round(duration_bw, 2);  // Update total transformation time for B/W images
+        await execPromised(`magick convert ${image} -colorspace LinearGray ${outputFilePathGray}`);
+        
+        const end_transform_time_bw = process.hrtime(start_transform_time_bw); 
+        const duration_bw = (end_transform_time_bw[0] * 1e9 + end_transform_time_bw[1]) / 1e9;
+        totalTransformationTimeBW += duration_bw.toFixed(2);
 
         const data = await fs.promises.readFile(outputFilePathGray);
         await uploadToS3AndStoreInList(data, storageKey, bucketName, transformedPhotoData1);
-
         await deleteLocalFile(outputFilePathGray);
+
       } catch (error) {
         console.error('Error during image transformation or S3 upload:', error);
       }
@@ -282,30 +263,23 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
       const execPromised = util.promisify(exec);  
 
       try {
-        //TODO: Likte egentlig denne ganske bra
-        const start_transform_time_sig = process.hrtime();  // Capture start time for Blurred transformation
-        await execPromised(`convert ${image} -brightness-contrast -10x10 -modulate 120,90 ${outputFilePathBlurred}`);
-        //await execPromised(`magick convert ${image} -sigmoidal-contrast 15x30% -modulate 50 ${outputFilePathBlurred}`);
+        const start_transform_time_blurred = process.hrtime();
 
-        await execPromised(`convert ${outputFilePathBlurred} -sparse-color Barycentric '0,0 black 0,%h white' -function polynomial 4,-4,1 blurmap-${outputFilePathBlurred}`);
-        await execPromised(`convert ${outputFilePathBlurred} blurmap-${outputFilePathBlurred} -compose Blur -set option:compose:args 10 -composite composite-${outputFilePathBlurred}`);
+        await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 120,90 ${outputFilePathBlurred}`);
+        await execPromised(`magick convert ${outputFilePathBlurred} -sparse-color Barycentric '0,0 black 0,%h white' -function polynomial 4,-4,1 blurmap-${outputFilePathBlurred}`);
+        await execPromised(`magick convert ${outputFilePathBlurred} blurmap-${outputFilePathBlurred} -compose Blur -set option:compose:args 10 -composite composite-${outputFilePathBlurred}`);
         
-        const end_transform_time_sig = process.hrtime(start_transform_time_sig);  // Capture end time for Blurred transformation
-        
-        // Calculate the duration in milliseconds for Blurred transformation
-        const duration_sig = (end_transform_time_sig[0] * 1e9 + end_transform_time_sig[1]) / 1e6;
-        totalTransformationTimeBlurred += Math.round(duration_sig, 2); 
+        const end_transform_time_blurred = process.hrtime(start_transform_time_blurred);
+        const duration_blurred= (end_transform_time_blurred[0] * 1e9 + end_transform_time_blurred[1]) / 1e9;
+        totalTransformationTimeBlurred+= duration_blurred.toFixed(2); 
         
         const Blurred_filepath = `composite-${outputFilePathBlurred}`;
-
         const data = await fs.promises.readFile(Blurred_filepath);
         await uploadToS3AndStoreInList(data, storageKey2, bucketName, transformedPhotoData2);
         
         await deleteLocalFile(Blurred_filepath);
         await deleteLocalFile(outputFilePathBlurred);
         await deleteLocalFile(`blurmap-${outputFilePathBlurred}`);
-
-
       } catch (error) {
         console.error('Error during image transformation or S3 upload:', error);
       }
@@ -315,7 +289,7 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
   }
 
 
-  //TODO: Legge inn nytt filter (XXXX)
+  //Enhanced coloring of photos
   const params3 = { Bucket: bucketName, Key: storageKey3 };
   try {
     const s3Result3 = await s3.getObject(params3).promise();
@@ -332,18 +306,18 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
       const execPromised = util.promisify(exec);
 
       try {
-        const start_transform_time_XXXX = process.hrtime();  // Capture start time for XXXX transformation
-        await execPromised(`convert ${image} -brightness-contrast -10x10 -modulate 110,110 ${outputFilePathXXXX}`);
-        const end_transform_time_XXXX = process.hrtime(start_transform_time_XXXX);  // Capture end time for XXXX transformation
+        const start_transform_time_Enhanced = process.hrtime();  
 
-        // Calculate the duration in milliseconds for XXXX transformation
-        const duration_XXXX = (end_transform_time_XXXX[0] * 1e9 + end_transform_time_XXXX[1]) / 1e6;
-        totalTransformationTimeXXXX += Math.round(duration_XXXX, 2);  // Update total transformation time for XXXX images
+        await execPromised(`magick convert ${image} -brightness-contrast -10x10 -modulate 110,110 ${outputFilePathEnhanced}`);
+        
+        const end_transform_time_Enhanced = process.hrtime(start_transform_time_Enhanced); 
+        const duration_Enhanced = (end_transform_time_Enhanced[0] * 1e9 + end_transform_time_Enhanced[1]) / 1e9;
+        totalTransformationTimeEnhanced += duration_Enhanced.toFixed(2);
 
-        const data = await fs.promises.readFile(outputFilePathXXXX);
+        const data = await fs.promises.readFile(outputFilePathEnhanced);
         await uploadToS3AndStoreInList(data, storageKey3, bucketName, transformedPhotoData3);
 
-        await deleteLocalFile(outputFilePathXXXX);
+        await deleteLocalFile(outputFilePathEnhanced);
       } catch (error) {
         console.error('Error during image transformation or S3 upload:', error);
       }
@@ -351,7 +325,7 @@ async function checkS3BucketAndGenerateNewImage(bucketName, storageKey, storageK
   }
 }  
 
-
+//Function for checking for new day
 function isNewDay(lastSavedDay) {
   // Create a Date object for the current date
   const currentDate = new Date();
