@@ -1,5 +1,6 @@
 <head>
     <title>File Upload and Processing</title>
+    {{!-- Utilizing some bootstrap elements --}}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
 </head>
 <body>
@@ -11,7 +12,7 @@
           <button type="submit" class="btn btn-primary mt-3">Upload and process photos</button>
       </form>
     
-  <hr>-
+  <hr>
 
   <h2 class="text-center mt-4">Uploaded and Processed Files</h2>
     <div class="row">
@@ -28,7 +29,7 @@
                 {{/each}}
             </div>
             <div class="text-center mt-4">
-                <p>Total B/W Transformation Time: {{totalTransformationTimeBW}} ms</p>
+                <p>Total B/W Transformation Time: {{totalTransformationTimeBW}} s</p>
             </div>
         </div>
 
@@ -45,15 +46,15 @@
                 {{/each}}
             </div>
              <div class="text-center mt-4">
-                <p>Total Blurred Transformation Time: {{totalTransformationTimeBlurred}} ms</p>
+                <p>Total Blurred Transformation Time: {{totalTransformationTimeBlurred}} s</p>
             </div>
         </div>
 
-            <!-- Thrid List - Uploaded and Processed Files (XXXX) -->
+            <!-- Thrid List - Uploaded and Processed Files (Enhanced) -->
         <div class="col">
-            <h2 class="text-center mt-4">XXXX</h2>
-            <div id="uploadTransformedPhotosXXXX" class="d-flex flex-wrap justify-content-center">
-                {{#each uploadTransformedPhotosXXXX}}
+            <h2 class="text-center mt-4">Enhanced Coloring</h2>
+            <div id="uploadTransformedPhotosEnhanced" class="d-flex flex-wrap justify-content-center">
+                {{#each uploadTransformedPhotosEnhanced}}
                     <div class="uploaded-image">
                         <a href="{{this.s3URL}}" download="{{this.storageKey}}">
                             <img src="{{this.s3URL}}" alt="{{this.storageKey}}" class="img-fluid" width="500">
@@ -62,7 +63,7 @@
                 {{/each}}
             </div>
             <div class="text-center mt-4">
-                <p>Total XXXX Transformation Time: {{totalTransformationTimeXXXX}} ms</p>
+                <p>Total Enhanced Transformation Time: {{totalTransformationTimeEnhanced}} s</p>
             </div>
         </div>
 
